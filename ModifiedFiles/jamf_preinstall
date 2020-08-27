@@ -1,0 +1,50 @@
+#!/bin/bash
+
+logFile="/Library/Logs/BESAgent.log"
+Log()
+{
+	echo "`date`: preinstall: $1" >> $logFile
+}
+
+Log "Package is: \"$PACKAGE_PATH\""
+pkgDirectory="`dirname "$PACKAGE_PATH"`"
+Log "Package Path is: \"$pkgDirectory\""
+
+######################################################################################
+# Masthead move if we are upgrading or installing
+mastHeadName="ActionSite.afxm"
+mastheadDestination="/Library/Application Support/BigFix/BES Agent"
+# launchd location (7.0 BESAgent for 10.4+ agents)
+masthead7Plus="/Library/BESAgent/BESAgent.app/Contents/MacOS"
+mkdir -p "$mastheadDestination"
+# If the masthead is next to the package installer use it
+# else if there is a masthead in the bundle (upgrade) copy it unless there is already a masthead in the storage path
+if [ -f "$pkgDirectory/$mastHeadName" ]; then
+	Log "$mastHeadName found in $pkgDirectory and copied to $mastheadDestination"
+	cp -f "$pkgDirectory/$mastHeadName" "$mastheadDestination/$mastHeadName"
+elif [ -f "$masthead7Plus/$mastHeadName" ]; then
+	if [ ! -f "$mastheadDestination/$mastHeadName" ]; then
+		Log "$mastHeadName found in $masthead7Plus and copied to $mastheadDestination"
+		cp -f "$masthead7Plus/$mastHeadName" "$mastheadDestination/$mastHeadName"
+	fi
+fi
+######################################################################################
+
+if [[ -f "actionsite.afxm" ]]; then
+	Log "Found actionsite.afxm, installing it..."
+    mkdir -p "${3}/Library/Application Support/BigFix/BES Agent/"
+	cp "actionsite.afxm" "${3}/Library/Application Support/BigFix/BES Agent/"
+fi
+
+
+if [ "${3}" == "/" ]; then
+	Log "Target is internal drive, stoping daemon..."
+    # kill the currently running client, if running.
+    if [ -f "/Library/LaunchDaemons/BESAgentDaemon.plist" ]; then
+    	Log "Stopping BESAgent"
+    	launchctl unload /Library/LaunchDaemons/BESAgentDaemon.plist 2>&1 >> "/Library/Logs/BESAgent.log"
+    	sleep 15
+    fi
+fi
+
+exit 0

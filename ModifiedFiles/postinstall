@@ -1,0 +1,76 @@
+#!/bin/bash
+
+# Matt Hansen (mah60@psu.edu) - 3/3/2014
+# modified for DEP by rzm102 - 01/25/2016
+# Added code for automatic group - 01/29/2018
+
+logFile="/Library/Logs/BESAgent.log"
+Log()
+{
+	echo "`date`: postinstall: $1" >> $logFile
+}
+
+/usr/sbin/chown root:wheel "${3}/Library/LaunchDaemons/BESAgentDaemon.plist"
+
+/usr/sbin/chown -f -R root:wheel "${3}/Library/BESAgent"
+
+/bin/chmod -f -R go-wx "${3}/Library/BESAgent"
+/bin/chmod -f -R go+X "${3}/Library/BESAgent"
+
+if [[ ! -e "${3}/Library/Application Support/BigFix/BES Agent/" ]]; then
+	mkdir -p "${3}/Library/Application Support/BigFix/BES Agent/"
+fi
+/usr/sbin/chown -f -R root:wheel "${3}/Library/Application Support/BigFix/BES Agent"
+
+if [[ ! -f "${3}/Library/Preferences/com.bigfix.BESAgent.plist" ]]; then
+	if [[ -f "clientsettings.cfg" ]]; then
+		Log "No com.bigfix.BESAgent.plist on the host, found clientsettings.cfg"
+		"${3}/Library/BESAgent/BESAgent.app/Contents/MacOS/CfgToPList.pl" "clientsettings.cfg" "${3}/Library/Preferences/com.bigfix.BESAgent.plist"
+	fi
+fi
+
+if [[ -f "brand.txt" ]]; then
+	Log "Found brand.txt, checking for com.bigfix.BESAgent.plist"
+	if [[ -f "${3}/Library/Preferences/com.bigfix.BESAgent.plist" ]]; then
+		BESBRAND=$(cat "brand.txt")
+		Log "Found com.bigfix.BESAgent.plist, adding brand: $BESBRAND"
+		defaults write "${3}/Library/Preferences/com.bigfix.BESAgent.plist" Brand -string "$BESBRAND"
+	else
+		Log "Could not find com.bigfix.BESAgent.plist"
+	fi
+fi
+
+# Moving to preinstall
+# if [[ -f "actionsite.afxm" ]]; then
+#     echo "Found actionsite.afxm, installing it..."
+#     cp "actionsite.afxm" "${3}/Library/Application Support/BigFix/BES Agent/"
+# fi
+
+if [[ $(ls *.id) ]]; then
+	Log "Found id file, copying..."
+	cp $(ls *.id) "${3}/Library/BESAgent/"
+fi
+
+if [[ $(ls *.ag) ]]; then
+	Log "Found ag file, copying..."
+	cp $(ls *.ag) "${3}/Library/BESAgent/"
+fi
+
+if [ "${3}" == "/" ]; then
+	Log "Target is internal drive, starting daemon..."
+    # Start up if there is a plist and masthead
+    if [ -f "/Library/LaunchDaemons/BESAgentDaemon.plist" ]; then
+    	if [ -f "/Library/Application Support/BigFix/BES Agent/actionsite.afxm" ]; then
+    		Log "Starting BESAgent with launchctl"
+    		launchctl load /Library/LaunchDaemons/BESAgentDaemon.plist 2>&1 >> "/Library/Logs/BESAgent.log"
+        else
+            Log "Could not find actionsite.afxm file."
+    	fi
+    else
+        Log "Could not find BESAgentDaemon.plist"
+    fi
+fi
+
+Log "Completed BESAgent installs."
+
+exit 0
